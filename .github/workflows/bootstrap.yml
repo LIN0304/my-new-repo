@@ -1,0 +1,39 @@
+name: publish-staged-project
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.bootstrap/**'
+      - '.github/workflows/bootstrap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct verified project bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/part-* | base64 --decode --ignore-garbage > /tmp/veil.tar.xz
+          echo "a2ba2c5761b82eac6c3c0b60763b3c42c8ee48db01874ee1bceda2c7278dfd97  /tmp/veil.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/veil
+          tar -xJf /tmp/veil.tar.xz -C /tmp/veil
+          cp -a /tmp/veil/veil-research-gateway/. .
+          rm -rf .bootstrap .github/workflows/bootstrap.yml
+
+      - name: Publish source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: publish VEIL research privacy gateway"
+          git push
