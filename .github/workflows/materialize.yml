@@ -1,0 +1,57 @@
+name: materialize-clean-veil-tree
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/materialize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Materialize the clean Git tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLEAN_TREE: a7e80bd2971fa518ff79a3e7a621b96995fda8ce
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          curl -fsSL "${auth[@]}" "${api}/git/trees/${CLEAN_TREE}?recursive=1" > /tmp/veil-tree.json
+          test "$(jq -r '.truncated' /tmp/veil-tree.json)" = "false"
+          test "$(jq '[.tree[] | select(.type == "blob")] | length' /tmp/veil-tree.json)" -ge 20
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          while IFS=$'\t' read -r path sha; do
+            mkdir -p "$(dirname "$path")"
+            curl -fsSL "${auth[@]}" "${api}/git/blobs/${sha}" \
+              | jq -r '.content' \
+              | tr -d '\n' \
+              | base64 --decode > "$path"
+          done < <(jq -r '.tree[] | select(.type == "blob") | [.path, .sha] | @tsv' /tmp/veil-tree.json)
+
+          test -f index.html
+          test -f src/engine.js
+          test -f .github/workflows/ci.yml
+          test ! -e .bootstrap
+          test ! -e .transport
+          test ! -e .github/workflows/bootstrap.yml
+          test ! -e .github/workflows/materialize.yml
+
+      - name: Publish clean source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: establish clean VEIL source tree"
+          git push
