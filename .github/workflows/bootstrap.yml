@@ -21,7 +21,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .bootstrap/part-* | base64 --decode --ignore-garbage > /tmp/veil.tar.xz
+          mkdir -p /tmp/veil-parts
+          expected=(
+            deb0e96175710dc0a2cad414b77ca1b407e89ca71a0a581448ea7c5837a38c6f
+            faad4463bf0c5a498243a2944946c4b31991be6ad6e33825a45ff157e8fddd9d
+            2a449891ebde4c786cce4bcc49b9dac540f6ebf0ad26710b7f8681d25ed51231
+            42071f6b5c3917ea648eb2632f3a4339a1028a240c15797d436136dde3342f07
+            0155b1a3a7ee02f54fb38d88f42bd66026383fad7379172836348ead40bf8d8b
+            6ed302b2f8c56a0393a7a3b7af353698ca30a15f5aa702ca3adbc0051afa2a8a
+          )
+          for i in 00 01 02 03 04 05; do
+            tr -d '[:space:]' < ".bootstrap/part-${i}" > "/tmp/veil-parts/part-${i}"
+            n=$((10#$i))
+            echo "${expected[$n]}  /tmp/veil-parts/part-${i}" | sha256sum -c -
+          done
+          cat /tmp/veil-parts/part-* | base64 --decode > /tmp/veil.tar.xz
           echo "a2ba2c5761b82eac6c3c0b60763b3c42c8ee48db01874ee1bceda2c7278dfd97  /tmp/veil.tar.xz" | sha256sum -c -
           mkdir -p /tmp/veil
           tar -xJf /tmp/veil.tar.xz -C /tmp/veil
